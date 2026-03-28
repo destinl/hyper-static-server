@@ -15,7 +15,7 @@ use axum::{
 use std::path::Path;
 use std::time::SystemTime;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
+use tokio::io::{AsyncSeekExt, SeekFrom};
 use tokio_util::io::ReaderStream;
 use url::percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 

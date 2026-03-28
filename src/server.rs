@@ -201,7 +201,7 @@ fn handle_directory_request(
     let mut response = Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-        .header(header::CONTENT_LENGTH, html.len())
+        .header(header::CONTENT_LENGTH, html.len().to_string())
         .body(axum::body::Body::from(html))
         .expect("Failed to build directory listing response");
 
