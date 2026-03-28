@@ -8,8 +8,7 @@
 /// - 静态文件：使用状态层处理
 
 use axum::{
-    Router,
-    routing::{get, head, options},
+    routing::{get, Router},
     extract::{Path, State, Request},
     response::{Response, IntoResponse},
     http::{Method, StatusCode, header},
@@ -78,7 +77,7 @@ fn validate_path_within_root(
     follow_symlinks: bool,
 ) -> ServerResult<PathBuf> {
     // 解码 URL 编码的字符
-    let decoded = urlencoding_decode(requested)?;
+    let decoded = decode_url(requested)?;
     let root_canonical = root
         .canonicalize()
         .map_err(|_| ServerError::IoError("Failed to canonicalize root".into()))?;
@@ -119,10 +118,9 @@ fn validate_path_within_root(
 }
 
 /// URL 解码辅助函数
-fn urlencoding_decode(s: &str) -> ServerResult<String> {
-    url::percent_encoding::percent_decode_str(s)
-        .decode_utf8()
-        .map(|cow| cow.to_string())
+fn decode_url(s: &str) -> Result<String, ServerError> {
+    urlencoding::decode(s)
+        .map(|cow| cow.into_owned())
         .map_err(|_| ServerError::BadRequest("Invalid URL encoding".into()))
 }
 
@@ -136,11 +134,11 @@ async fn handle_options(
             [
                 (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
                 (header::ACCESS_CONTROL_ALLOW_METHODS, "GET, HEAD, OPTIONS"),
-                (header::ACCESS_CONTROL_ALLOW_HEADERS, "*")
+                (header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type"),
             ],
-        )
+        ).into_response()
     } else {
-        StatusCode::NO_CONTENT
+        StatusCode::NO_CONTENT.into_response()
     }
 }
 
@@ -407,11 +405,21 @@ mod tests {
     }
 
     #[test]
-    fn test_urlencoding_decode() {
-        // Happy Path: URL 解码
-        assert_eq!(urlencoding_decode("hello%20world").unwrap(), "hello world");
-        assert_eq!(urlencoding_decode("path%2Fto%2Ffile").unwrap(), "path/to/file");
-        assert_eq!(urlencoding_decode("test%2Etxt").unwrap(), "test.txt");
+    fn test_decode_url() {
+        // Happy Path: 正常解码
+        assert_eq!(decode_url("hello%20world").unwrap(), "hello world");
+        assert_eq!(decode_url("path%2Fto%2Ffile").unwrap(), "path/to/file");
+        assert_eq!(decode_url("test%2Etxt").unwrap(), "test.txt");
+        
+        // Edge Case: 不需要解码的字符串
+        assert_eq!(decode_url("normal").unwrap(), "normal");
+        assert_eq!(decode_url("").unwrap(), "");
+        
+        // Error Case: 无效的百分号编码
+        assert!(decode_url("%").is_err());
+        assert!(decode_url("%2").is_err());
+        assert!(decode_url("%XX").is_err());
+        assert!(decode_url("%2X").is_err());
     }
 
     #[test]

@@ -17,7 +17,7 @@ use std::time::SystemTime;
 use tokio::fs::File;
 use tokio::io::{AsyncSeekExt, SeekFrom};
 use tokio_util::io::ReaderStream;
-use url::percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
+use urlencoding::encode;
 
 use crate::error::{ServerError, ServerResult};
 use crate::mime::detect_mime_type;
@@ -170,7 +170,7 @@ pub fn is_cache_valid(
 ) -> bool {
     // 检查 If-None-Match (ETag 匹配)
     if let Some(client_etag) = if_none_match {
-        let matches = client_etag
+        let mut matches = client_etag
             .split(',')
             .map(str::trim)
             .map(|value| value.trim_start_matches("W/").trim_matches('"'));
@@ -224,7 +224,7 @@ pub async fn build_full_file_response(
 
     let file = File::open(path).await.map_err(ServerError::from)?;
     let stream = ReaderStream::new(file);
-    let body = Body::wrap_stream(stream);
+    let body = Body::from_stream(stream);
 
     let response = Response::builder()
         .status(StatusCode::OK)
@@ -262,7 +262,7 @@ pub async fn build_partial_response(
         .map_err(ServerError::from)?;
 
     let stream = ReaderStream::new(file.take(range.content_length()));
-    let body = Body::wrap_stream(stream);
+    let body = Body::from_stream(stream);
     let content_range = range.to_content_range(metadata.size);
 
     let response = Response::builder()
@@ -279,22 +279,6 @@ pub async fn build_partial_response(
     Ok(response)
 }
 
-const PATH_SEGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'"')
-    .add(b'<')
-    .add(b'>')
-    .add(b'#')
-    .add(b'%')
-    .add(b'{')
-    .add(b'}')
-    .add(b'|')
-    .add(b'^')
-    .add(b'~')
-    .add(b'[')
-    .add(b']')
-    .add(b'`');
-
 fn html_escape(input: &str) -> String {
     input
         .replace('&', "&amp;")
@@ -304,8 +288,8 @@ fn html_escape(input: &str) -> String {
         .replace('\'', "&#39;")
 }
 
-fn url_encode_segment(input: &str) -> String {
-    utf8_percent_encode(input, PATH_SEGMENT_ENCODE_SET).to_string()
+fn encode_path_segment(input: &str) -> String {
+    encode(input).to_string()
 }
 
 /// 构建目录列表 HTML
@@ -365,13 +349,13 @@ pub fn build_directory_listing(
     files.sort();
 
     for dir in dirs {
-        let link = format!("{}/", url_encode_segment(&dir));
+        let link = format!("{}/", encode_path_segment(&dir));
         let label = html_escape(&format!("{}/", dir));
         html.push_str(&format!("  <li><a href=\"{}\">{}</a></li>\n", link, label));
     }
 
     for file in files {
-        let link = url_encode_segment(&file);
+        let link = encode_path_segment(&file);
         let label = html_escape(&file);
         html.push_str(&format!("  <li><a href=\"{}\">{}</a></li>\n", link, label));
     }
