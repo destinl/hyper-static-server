@@ -369,6 +369,7 @@ pub fn build_directory_listing(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::SystemTime;
 
     #[test]
     fn test_file_metadata_etag_generation() {
@@ -445,15 +446,16 @@ mod tests {
 
     #[test]
     fn test_is_cache_valid_etag_match() {
-        // Happy Path: ETag 匹配，缓存有效
-        assert!(is_cache_valid(Some("\"abc-123\""), "abc-123", None, 12345));
-        assert!(is_cache_valid(Some("W/\"abc-123\""), "abc-123", None, 12345));
+        let now = SystemTime::now();
+        assert!(is_cache_valid(Some("\"abc-123\""), "abc-123", None, now));
+        assert!(is_cache_valid(Some("W/\"abc-123\""), "abc-123", None, now));
+        assert!(!is_cache_valid(Some("\"xyz-789\""), "abc-123", None, now));
     }
 
     #[test]
     fn test_is_cache_valid_etag_mismatch() {
         // Happy Path: ETag 不匹配，缓存无效
-        assert!(!is_cache_valid(Some("\"xyz-789\""), "abc-123", None, 12345));
+        assert!(!is_cache_valid(Some("\"xyz-789\""), "abc-123", None, SystemTime::now()));
     }
 
     #[test]

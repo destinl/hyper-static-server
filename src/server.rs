@@ -368,7 +368,6 @@ pub async fn start_server(config: ServerConfig) -> ServerResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn test_validate_path_within_root_normal() {

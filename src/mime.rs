@@ -23,7 +23,6 @@ pub fn detect_mime_type(path: &std::path::Path) -> String {
     // PERF: 使用 mime_guess 的 first_or_octet_stream 方法
     // 理由: 未知类型时返回 application/octet-stream 而非失败
     // 基准: 比手动映射快 2x (内部使用哈希表缓存)
-    // 链接: benches/throughput.rs L78 (MIME 查找微基准)
     MimeGuess::from_path(path)
         .first_or_octet_stream()
         .to_string()
@@ -59,27 +58,23 @@ mod tests {
 
     #[test]
     fn test_detect_mime_type_html() {
-        // Happy Path: HTML 文件
         assert_eq!(detect_mime_type(Path::new("test.html")), "text/html");
         assert_eq!(detect_mime_type(Path::new("page.htm")), "text/html");
     }
 
     #[test]
     fn test_detect_mime_type_css() {
-        // Happy Path: CSS 文件
         assert_eq!(detect_mime_type(Path::new("style.css")), "text/css");
     }
 
     #[test]
     fn test_detect_mime_type_javascript() {
-        // Happy Path: JavaScript 文件
         assert_eq!(detect_mime_type(Path::new("app.js")), "application/javascript");
         assert_eq!(detect_mime_type(Path::new("data.json")), "application/json");
     }
 
     #[test]
     fn test_detect_mime_type_images() {
-        // Happy Path: 图片文件
         assert_eq!(detect_mime_type(Path::new("image.png")), "image/png");
         assert_eq!(detect_mime_type(Path::new("photo.jpg")), "image/jpeg");
         assert_eq!(detect_mime_type(Path::new("photo.jpeg")), "image/jpeg");
@@ -88,7 +83,6 @@ mod tests {
 
     #[test]
     fn test_detect_mime_type_text() {
-        // Happy Path: 文本文件
         assert_eq!(detect_mime_type(Path::new("readme.txt")), "text/plain");
     }
 
@@ -102,30 +96,15 @@ mod tests {
     #[test]
     fn test_detect_mime_type_no_extension() {
         // Edge Case: 没有扩展名的文件
-        let result = detect_mime_type(Path::new("README"));
+        let result = detect_mime_type(Path::new("noextension"));
         assert_eq!(result, "application/octet-stream");
     }
 
     #[test]
     fn test_detect_mime_type_with_path() {
-        // Happy Path: 带路径的文件名
+        // 带路径的文件名
         let result = detect_mime_type(Path::new("dir/subdir/test.html"));
         assert_eq!(result, "text/html");
-    }
-
-    #[test]
-    fn test_detect_mime_type_pdf_wasm() {
-        // Happy Path: PDF 和 WASM 文件
-        assert_eq!(detect_mime_type(Path::new("document.pdf")), "application/pdf");
-        assert_eq!(detect_mime_type(Path::new("module.wasm")), "application/wasm");
-    }
-}
-
-    #[test]
-    fn test_detect_mime_type_no_extension() {
-        // Edge Case: 无扩展名返回 octet-stream
-        let result = detect_mime_type(Path::new("noextension"));
-        assert_eq!(result, "application/octet-stream");
     }
 
     #[test]
@@ -143,8 +122,13 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_mime_type_pdf_wasm() {
+        assert_eq!(detect_mime_type(Path::new("document.pdf")), "application/pdf");
+        assert_eq!(detect_mime_type(Path::new("module.wasm")), "application/wasm");
+    }
+
+    #[test]
     fn test_common_mime_types_complete() {
-        // Happy Path: 常见 MIME 类型列表完整
         let common = get_common_mime_types();
         assert!(!common.is_empty());
         assert!(common.len() >= 10);
@@ -155,3 +139,4 @@ mod tests {
             assert_eq!(mime, expected_mime, "MIME mismatch for extension: {}", ext);
         }
     }
+}
