@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  hyper-static-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for hot reload during development
+      - .:/app
+      - ./public:/app/public:ro
+    environment:
+      - RUST_LOG=debug
+    restart: unless-stopped
+    networks:
+      - dev-network
+
+networks:
+  dev-network:
+    driver: bridge

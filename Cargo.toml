@@ -1,0 +1,77 @@
+[package]
+name = "hyper-static-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "High-performance command-line static file server demonstrating Rust's advantages over Node.js/Python"
+license = "MIT"
+repository = "https://github.com/yourusername/hyper-static-server"
+keywords = ["static-server", "performance", "http", "cli"]
+categories = ["network-programming", "command-line-utilities"]
+
+[dependencies]
+# Web Framework
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+
+# CLI Argument Parsing
+clap = { version = "4", features = ["derive"] }
+
+# MIME Type Detection
+mime_guess = "2"
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Utilities
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = "0.4"
+url = "2"
+httpdate = "1.0"
+tokio-util = { version = "0.7", features = ["io"] }
+
+# HTTP utilities
+http = "1.0"
+hyper = { version = "1", features = ["full"] }
+
+# Middleware
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+tower = "0.4"
+
+[dev-dependencies]
+# Integration testing
+reqwest = { version = "0.11", features = ["json"] }
+
+# Tokio test utilities
+tokio-test = "0.4"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "throughput"
+harness = false
+
+[[bench]]
+name = "latency"
+harness = false
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = true
+codegen-units = 1
+incremental = false
+strip = true
+
+[profile.bench]
+inherits = "release"
