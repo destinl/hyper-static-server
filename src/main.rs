@@ -64,6 +64,18 @@ struct Cli {
     /// 启用文件删除
     #[arg(long = "allow-delete", default_value = "false")]
     allow_delete: bool,
+
+    /// Basic Auth 认证 (格式: username:password)
+    #[arg(long = "auth")]
+    auth: Option<String>,
+
+    /// 最大上传文件大小 (字节，默认 100MB)
+    #[arg(long = "max-upload-size", default_value = "104857600")]
+    max_upload_size: u64,
+
+    /// 每秒最大请求数 (0 表示不限制)
+    #[arg(long = "rate-limit", default_value = "0")]
+    rate_limit: u32,
 }
 
 /// 初始化日志记录器
