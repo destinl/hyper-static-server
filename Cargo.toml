@@ -12,7 +12,7 @@ categories = ["network-programming", "command-line-utilities"]
 [dependencies]
 # Web Framework
 tokio = { version = "1", features = ["full"] }
-axum = "0.7"
+axum = { version = "0.7", features = ["multipart"] }
 
 # CLI Argument Parsing
 clap = { version = "4", features = ["derive"] }

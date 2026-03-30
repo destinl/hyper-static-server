@@ -32,12 +32,16 @@ impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             ServerError::NotFound => (StatusCode::NOT_FOUND, "Not Found"),
-            ServerError::PermissionDenied => (StatusCode::FORBIDDEN, "Permission Denied"),
-            ServerError::PathTraversal => (StatusCode::FORBIDDEN, "Path Traversal Detected"),
-            ServerError::SymlinkEscape => (StatusCode::FORBIDDEN, "Symlink Escape Not Allowed"),
-            ServerError::InvalidRange => (StatusCode::BAD_REQUEST, "Invalid Range Request"),
-            ServerError::BadRequest(_) => (StatusCode::BAD_REQUEST, "Bad Request"),
+            ServerError::BadRequest => (StatusCode::BAD_REQUEST, "Bad Request"),
+            ServerError::InternalServerError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
+            ServerError::DatabaseError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Database Error"),
+            ServerError::FileError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "File Error"),
             ServerError::IoError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
+            ServerError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
+            ServerError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Too Many Requests"),
+            ServerError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large"),
+            // 使用通配符处理其他未列出的变体
+            _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
         };
 
         let body = format!("{} {}\n", status.as_u16(), message);
