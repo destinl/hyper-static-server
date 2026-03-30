@@ -36,6 +36,18 @@ pub enum ServerError {
     /// 无效请求
     #[error("Bad request: {0}")]
     BadRequest(String),
+
+    /// 未授权访问
+    #[error("Unauthorized")]
+    Unauthorized,
+
+    /// 请求过多 (限流)
+    #[error("Too many requests")]
+    TooManyRequests,
+
+    /// 文件过大
+    #[error("Payload too large")]
+    PayloadTooLarge,
 }
 
 impl From<std::io::Error> for ServerError {
@@ -62,6 +74,9 @@ impl From<ServerError> for StatusCode {
             }
             ServerError::InvalidRange | ServerError::BadRequest(_) => StatusCode::BAD_REQUEST,
             ServerError::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ServerError::Unauthorized => StatusCode::UNAUTHORIZED,
+            ServerError::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
+            ServerError::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
         }
     }
 }

@@ -8,11 +8,12 @@
 /// - 静态文件：使用状态层处理
 
 use axum::{
-    routing::{get, Router},
-    extract::{Path, State, Request},
-    response::{Response, IntoResponse},
+    routing::{get, post, delete, Router},
+    extract::{Path, State, Request, Multipart},
+    response::{Response, IntoResponse, Json},
     http::{Method, StatusCode, header},
 };
+use serde::Serialize;
 use std::{path::{Component, PathBuf}, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
@@ -63,6 +64,10 @@ pub struct ServerConfig {
     pub cors: bool,
     /// 是否跟随符号链接
     pub follow_symlinks: bool,
+    /// 是否启用文件上传
+    pub allow_upload: bool,
+    /// 是否启用文件删除
+    pub allow_delete: bool,
 }
 
 /// 应用状态 (在所有请求间共享)
@@ -184,7 +189,13 @@ async fn handle_static_file(
 
     if metadata.is_dir() {
         // 目录请求 - 生成目录列表
-        return handle_directory_request(&file_path, &requested_path, config.cors);
+        return handle_directory_request(
+            &file_path,
+            &requested_path,
+            config.cors,
+            config.allow_upload,
+            config.allow_delete,
+        );
     }
 
     // 文件请求 - 处理静态文件 (支持 Range 和缓存)
@@ -196,9 +207,11 @@ fn handle_directory_request(
     dir_path: &PathBuf,
     request_path: &str,
     cors: bool,
+    allow_upload: bool,
+    allow_delete: bool,
 ) -> Result<Response, ServerError> {
     // 生成目录列表 HTML
-    let html = build_directory_listing(dir_path, request_path)?;
+    let html = build_directory_listing(dir_path, request_path, allow_upload, allow_delete)?;
 
     let mut response = Response::builder()
         .status(StatusCode::OK)
@@ -292,6 +305,8 @@ async fn handle_root(
             &state.config.root_dir,
             "/",
             state.config.cors,
+            state.config.allow_upload,
+            state.config.allow_delete,
         )
     }
 }
@@ -303,6 +318,139 @@ async fn handle_wildcard(
     request: Request,
 ) -> Result<Response, ServerError> {
     handle_static_file(Path(requested_path), State(state), request).await
+}
+
+/// 上传响应结构
+#[derive(Serialize)]
+struct UploadResponse {
+    success: bool,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    filename: Option<String>,
+}
+
+/// 处理文件上传
+async fn handle_upload(
+    Path(requested_path): Path<String>,
+    State(state): State<Arc<AppState>>,
+    mut multipart: Multipart,
+) -> Result<Json<UploadResponse>, ServerError> {
+    let config = &state.config;
+
+    // 检查是否允许上传
+    if !config.allow_upload {
+        return Ok(Json(UploadResponse {
+            success: false,
+            message: "文件上传已禁用".to_string(),
+            filename: None,
+        }));
+    }
+
+    // 验证上传目录
+    let upload_dir = if requested_path.is_empty() || requested_path == "/" {
+        config.root_dir.clone()
+    } else {
+        validate_path_within_root(&config.root_dir, &requested_path, config.follow_symlinks)?
+    };
+
+    // 确保目标是目录
+    if !upload_dir.is_dir() {
+        return Err(ServerError::BadRequest("目标路径不是目录".into()));
+    }
+
+    // 处理上传的文件
+    let mut uploaded_filename = None;
+    
+    while let Some(field) = multipart.next_field().await.map_err(|e| {
+        ServerError::BadRequest(format!("读取上传数据失败: {}", e))
+    })? {
+        let filename = field.file_name()
+            .ok_or_else(|| ServerError::BadRequest("缺少文件名".into()))?
+            .to_string();
+
+        // 安全检查：防止路径遍历
+        if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
+            return Err(ServerError::BadRequest("无效的文件名".into()));
+        }
+
+        let data = field.bytes().await.map_err(|e| {
+            ServerError::BadRequest(format!("读取文件数据失败: {}", e))
+        })?;
+
+        let file_path = upload_dir.join(&filename);
+        
+        // 写入文件
+        tokio::fs::write(&file_path, &data).await.map_err(|e| {
+            ServerError::IoError(format!("写入文件失败: {}", e))
+        })?;
+
+        uploaded_filename = Some(filename);
+        break; // 只处理第一个文件
+    }
+
+    match uploaded_filename {
+        Some(name) => Ok(Json(UploadResponse {
+            success: true,
+            message: "上传成功".to_string(),
+            filename: Some(name),
+        })),
+        None => Err(ServerError::BadRequest("未收到文件".into())),
+    }
+}
+
+/// 处理根目录上传
+async fn handle_root_upload(
+    State(state): State<Arc<AppState>>,
+    multipart: Multipart,
+) -> Result<Json<UploadResponse>, ServerError> {
+    handle_upload(Path(String::new()), State(state), multipart).await
+}
+
+/// 删除响应结构
+#[derive(Serialize)]
+struct DeleteResponse {
+    success: bool,
+    message: String,
+}
+
+/// 处理文件删除
+async fn handle_delete(
+    Path(requested_path): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<DeleteResponse>, ServerError> {
+    let config = &state.config;
+
+    // 检查是否允许删除
+    if !config.allow_delete {
+        return Ok(Json(DeleteResponse {
+            success: false,
+            message: "文件删除已禁用".to_string(),
+        }));
+    }
+
+    // 验证路径
+    let file_path = validate_path_within_root(&config.root_dir, &requested_path, config.follow_symlinks)?;
+
+    // 检查文件是否存在
+    if !file_path.exists() {
+        return Err(ServerError::NotFound);
+    }
+
+    // 删除文件或目录
+    if file_path.is_dir() {
+        tokio::fs::remove_dir_all(&file_path).await.map_err(|e| {
+            ServerError::IoError(format!("删除目录失败: {}", e))
+        })?;
+    } else {
+        tokio::fs::remove_file(&file_path).await.map_err(|e| {
+            ServerError::IoError(format!("删除文件失败: {}", e))
+        })?;
+    }
+
+    Ok(Json(DeleteResponse {
+        success: true,
+        message: "删除成功".to_string(),
+    }))
 }
 
 /// 启动 HTTP 服务器
@@ -326,12 +474,15 @@ pub async fn start_server(config: ServerConfig) -> ServerResult<()> {
             "/",
             get(handle_root)
                 .head(handle_root)
+                .post(handle_root_upload)
                 .options(handle_options),
         )
         .route(
             "/*path",
             get(handle_wildcard)
                 .head(handle_wildcard)
+                .post(handle_upload)
+                .delete(handle_delete)
                 .options(handle_options),
         )
         .layer(TraceLayer::new_for_http())
@@ -434,6 +585,8 @@ mod tests {
             root_dir: std::env::temp_dir(),
             cors: false,
             follow_symlinks: false,
+            allow_upload: false,
+            allow_delete: false,
         };
         let _clone = config.clone();
     }
@@ -447,6 +600,8 @@ mod tests {
             root_dir: std::env::temp_dir(),
             cors: true,
             follow_symlinks: false,
+            allow_upload: true,
+            allow_delete: false,
         };
         let _state = Arc::new(AppState {
             config: Arc::new(config),
@@ -472,11 +627,11 @@ mod tests {
     fn test_directory_listing_generation() {
         // Happy Path: 目录列表生成
         let temp_dir = std::env::temp_dir();
-        let result = build_directory_listing(&temp_dir, "/test/");
+        let result = build_directory_listing(&temp_dir, "/test/", false, false);
         assert!(result.is_ok());
         let html = result.unwrap();
         assert!(html.contains("<!DOCTYPE html>"));
-        assert!(html.contains("Index of /test/"));
+        assert!(html.contains("/test/"));
     }
 
     #[test]

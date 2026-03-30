@@ -59,18 +59,23 @@ fn test_server_config_creation() {
         root_dir: std::env::temp_dir(),
         cors: false,
         follow_symlinks: false,
+        allow_upload: false,
+        allow_delete: false,
     };
 
     assert_eq!(config.host, "127.0.0.1");
     assert_eq!(config.port, 3000);
     assert!(!config.cors);
     assert!(!config.follow_symlinks);
+    assert!(!config.allow_upload);
+    assert!(!config.allow_delete);
 }
 
 #[test]
 fn test_file_metadata_from_real_file() {
     // 测试 FileMetadata 能否从真实文件获取
     use hyper_static_server::FileMetadata;
+    use std::time::SystemTime;
 
     let test_file = std::env::temp_dir().join("test_metadata.bin");
     
@@ -83,7 +88,8 @@ fn test_file_metadata_from_real_file() {
     let metadata = FileMetadata::from_metadata(fs_metadata).expect("Failed to create FileMetadata");
 
     assert_eq!(metadata.size, 1024);
-    assert!(metadata.mtime > 0);
+    // modified 是 SystemTime 类型，验证它是有效的时间
+    assert!(metadata.modified >= SystemTime::UNIX_EPOCH);
 
     // 验证 ETag 生成
     let etag = metadata.generate_etag();
@@ -185,9 +191,11 @@ fn test_mime_detection_performance_hint() {
 fn test_etag_generation_consistency() {
     // 测试相同的文件元数据生成相同的 ETag
     use hyper_static_server::FileMetadata;
+    use std::time::{SystemTime, Duration};
 
-    let metadata1 = FileMetadata { size: 1024, mtime: 1234567890 };
-    let metadata2 = FileMetadata { size: 1024, mtime: 1234567890 };
+    let modified = SystemTime::UNIX_EPOCH + Duration::from_secs(1234567890);
+    let metadata1 = FileMetadata { size: 1024, modified };
+    let metadata2 = FileMetadata { size: 1024, modified };
 
     let etag1 = metadata1.generate_etag();
     let etag2 = metadata2.generate_etag();
@@ -199,9 +207,11 @@ fn test_etag_generation_consistency() {
 fn test_etag_generation_difference() {
     // 测试不同的文件元数据生成不同的 ETag
     use hyper_static_server::FileMetadata;
+    use std::time::{SystemTime, Duration};
 
-    let metadata1 = FileMetadata { size: 1024, mtime: 1234567890 };
-    let metadata2 = FileMetadata { size: 2048, mtime: 1234567890 };
+    let modified = SystemTime::UNIX_EPOCH + Duration::from_secs(1234567890);
+    let metadata1 = FileMetadata { size: 1024, modified };
+    let metadata2 = FileMetadata { size: 2048, modified };
 
     let etag1 = metadata1.generate_etag();
     let etag2 = metadata2.generate_etag();

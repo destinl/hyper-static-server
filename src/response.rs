@@ -293,36 +293,389 @@ fn encode_path_segment(input: &str) -> String {
     encode(input).to_string()
 }
 
+/// 文件信息结构体，用于目录列表
+struct FileInfo {
+    name: String,
+    is_dir: bool,
+    size: u64,
+    modified: Option<std::time::SystemTime>,
+}
+
+/// 格式化文件大小为人类可读格式
+fn format_file_size(size: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if size >= GB {
+        format!("{:.1} GB", size as f64 / GB as f64)
+    } else if size >= MB {
+        format!("{:.1} MB", size as f64 / MB as f64)
+    } else if size >= KB {
+        format!("{:.1} KB", size as f64 / KB as f64)
+    } else {
+        format!("{} B", size)
+    }
+}
+
+/// 格式化时间为人类可读格式
+fn format_time(time: Option<std::time::SystemTime>) -> String {
+    match time {
+        Some(t) => fmt_http_date(t),
+        None => "-".to_string(),
+    }
+}
+
 /// 构建目录列表 HTML
 ///
 /// # Arguments
 /// * `path` - 目录路径
 /// * `base_url` - 请求的 URL 路径
+/// * `allow_upload` - 是否允许上传文件
+/// * `allow_delete` - 是否允许删除文件
 ///
 /// # Returns
 /// HTML 格式的目录列表
 pub fn build_directory_listing(
     path: &Path,
     base_url: &str,
+    allow_upload: bool,
+    allow_delete: bool,
 ) -> ServerResult<String> {
-    let mut html = String::from("<!DOCTYPE html>\n<html><head>\n");
-    html.push_str("<meta charset=\"utf-8\">\n");
-    html.push_str("<title>Directory listing</title>\n");
-    html.push_str("</head><body>\n");
-    html.push_str(&format!("<h1>Index of {}</h1>\n", html_escape(base_url)));
-    html.push_str("<ul>\n");
+    let mut html = String::from(r#"<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>目录浏览</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --card-bg: #141414;
+            --border-color: #262626;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        header {
+            margin-bottom: 2rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .breadcrumb {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .breadcrumb a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        .toolbar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .upload-area {
+            flex: 1;
+            min-width: 300px;
+            border: 2px dashed var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.2s;
+            cursor: pointer;
+            background: var(--card-bg);
+        }
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--accent-color);
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .upload-area input[type="file"] {
+            display: none;
+        }
+        .upload-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        .upload-text {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .upload-text span {
+            color: var(--accent-color);
+            font-weight: 500;
+        }
+        .stats {
+            display: flex;
+            gap: 1.5rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .file-list {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .file-header {
+            display: grid;
+            grid-template-columns: 1fr 120px 200px;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .file-item {
+            display: grid;
+            grid-template-columns: 1fr 120px 200px;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-color);
+            transition: background 0.15s;
+            align-items: center;
+        }
+        .file-item:last-child {
+            border-bottom: none;
+        }
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .file-name {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .file-icon {
+            width: 2rem;
+            height: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--border-color);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+        .file-icon.folder {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--accent-color);
+        }
+        .file-name a {
+            color: var(--text-primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .file-name a:hover {
+            color: var(--accent-color);
+        }
+        .file-size, .file-date {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        .upload-progress {
+            display: none;
+            margin-top: 1rem;
+        }
+        .upload-progress.active {
+            display: block;
+        }
+        .progress-bar {
+            height: 4px;
+            background: var(--border-color);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--accent-color);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .upload-status {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .toast.success {
+            border-color: var(--success-color);
+        }
+        .toast.error {
+            border-color: #ef4444;
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            .file-header, .file-item {
+                grid-template-columns: 1fr;
+                gap: 0.25rem;
+            }
+            .file-size, .file-date {
+                font-size: 0.75rem;
+            }
+            .file-header .file-size,
+            .file-header .file-date {
+                display: none;
+            }
+            .stats {
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+                目录浏览
+            </h1>
+            <div class="breadcrumb" id="breadcrumb"></div>
+        </header>
+
+        <div class="toolbar">
+            <div class="upload-area" id="uploadArea">
+                <input type="file" id="fileInput" multiple>
+                <div class="upload-icon">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17,8 12,3 7,8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </div>
+                <div class="upload-text">
+                    拖拽文件到此处或 <span>点击上传</span>
+                </div>
+                <div class="upload-progress" id="uploadProgress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="upload-status" id="uploadStatus">上传中...</div>
+                </div>
+            </div>
+            <div class="stats" id="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="folderCount">0</div>
+                    <div class="stat-label">文件夹</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="fileCount">0</div>
+                    <div class="stat-label">文件</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalSize">0 B</div>
+                    <div class="stat-label">总大小</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="file-list">
+            <div class="file-header">
+                <span>名称</span>
+                <span class="file-size">大小</span>
+                <span class="file-date">修改时间</span>
+            </div>
+            <div id="fileListContent">
+"#);
 
     // 添加父目录链接 (如果不是根目录)
     if base_url != "/" && !base_url.is_empty() {
-        html.push_str("  <li><a href=\"../\">../</a></li>\n");
+        html.push_str(r#"                <div class="file-item">
+                    <div class="file-name">
+                        <div class="file-icon folder">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="15,18 9,12 15,6"></polyline>
+                            </svg>
+                        </div>
+                        <a href="../">返回上级目录</a>
+                    </div>
+                    <span class="file-size">-</span>
+                    <span class="file-date">-</span>
+                </div>
+"#);
     }
 
     // 读取目录内容
     let entries = std::fs::read_dir(path)
         .map_err(|_| ServerError::PermissionDenied)?;
 
-    let mut dirs = Vec::new();
-    let mut files = Vec::new();
+    let mut items: Vec<FileInfo> = Vec::new();
 
     for entry in entries {
         let entry = entry.map_err(|_| ServerError::PermissionDenied)?;
@@ -334,35 +687,211 @@ pub fn build_directory_listing(
             continue;
         }
 
-        let is_dir = entry.metadata()
-            .map(|m| m.is_dir())
-            .unwrap_or(false);
+        let metadata = entry.metadata().ok();
+        let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+        let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+        let modified = metadata.and_then(|m| m.modified().ok());
 
-        if is_dir {
-            dirs.push(name_str.to_string());
-        } else {
-            files.push(name_str.to_string());
+        items.push(FileInfo {
+            name: name_str.to_string(),
+            is_dir,
+            size,
+            modified,
+        });
+    }
+
+    // 排序：目录在前，然后按名称排序
+    items.sort_by(|a, b| {
+        match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
         }
+    });
+
+    // 统计信息
+    let folder_count = items.iter().filter(|i| i.is_dir).count();
+    let file_count = items.iter().filter(|i| !i.is_dir).count();
+    let total_size: u64 = items.iter().filter(|i| !i.is_dir).map(|i| i.size).sum();
+
+    // 生成文件列表
+    for item in &items {
+        let link = if item.is_dir {
+            format!("{}/", encode_path_segment(&item.name))
+        } else {
+            encode_path_segment(&item.name)
+        };
+        let label = html_escape(&item.name);
+        let size_str = if item.is_dir { "-".to_string() } else { format_file_size(item.size) };
+        let date_str = format_time(item.modified);
+        let icon_class = if item.is_dir { "folder" } else { "" };
+        let icon_svg = if item.is_dir {
+            r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>"#
+        } else {
+            r#"<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13,2 13,9 20,9"></polyline></svg>"#
+        };
+
+        html.push_str(&format!(
+            r#"                <div class="file-item">
+                    <div class="file-name">
+                        <div class="file-icon {}">{}</div>
+                        <a href="{}">{}</a>
+                    </div>
+                    <span class="file-size">{}</span>
+                    <span class="file-date">{}</span>
+                </div>
+"#,
+            icon_class, icon_svg, link, label, size_str, date_str
+        ));
     }
 
-    // 排序并添加目录
-    dirs.sort();
-    files.sort();
-
-    for dir in dirs {
-        let link = format!("{}/", encode_path_segment(&dir));
-        let label = html_escape(&format!("{}/", dir));
-        html.push_str(&format!("  <li><a href=\"{}\">{}</a></li>\n", link, label));
+    if items.is_empty() {
+        html.push_str(r#"                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin-bottom: 1rem; opacity: 0.5;">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <p>此目录为空</p>
+                </div>
+"#);
     }
 
-    for file in files {
-        let link = encode_path_segment(&file);
-        let label = html_escape(&file);
-        html.push_str(&format!("  <li><a href=\"{}\">{}</a></li>\n", link, label));
-    }
+    // 添加 JavaScript 和关闭标签
+    html.push_str(&format!(r#"            </div>
+        </div>
+    </div>
 
-    html.push_str("</ul>\n");
-    html.push_str("</body></html>");
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // 初始化
+        const currentPath = "{}";
+        const folderCount = {};
+        const fileCount = {};
+        const totalSize = "{}";
+
+        // 更新统计信息
+        document.getElementById('folderCount').textContent = folderCount;
+        document.getElementById('fileCount').textContent = fileCount;
+        document.getElementById('totalSize').textContent = totalSize;
+
+        // 生成面包屑导航
+        function generateBreadcrumb(path) {{
+            const breadcrumb = document.getElementById('breadcrumb');
+            const parts = path.split('/').filter(p => p);
+            let html = '<a href="/">根目录</a>';
+            let currentPath = '';
+            
+            parts.forEach((part, index) => {{
+                currentPath += '/' + part;
+                if (index < parts.length - 1) {{
+                    html += ' / <a href="' + currentPath + '/">' + part + '</a>';
+                }} else {{
+                    html += ' / ' + part;
+                }}
+            }});
+            
+            breadcrumb.innerHTML = html;
+        }}
+
+        generateBreadcrumb(currentPath);
+
+        // 显示提示消息
+        function showToast(message, type = 'info') {{
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => {{
+                toast.classList.remove('show');
+            }}, 3000);
+        }}
+
+        // 文件上传处理
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadProgress = document.getElementById('uploadProgress');
+        const progressFill = document.getElementById('progressFill');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        uploadArea.addEventListener('dragover', (e) => {{
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }});
+
+        uploadArea.addEventListener('dragleave', () => {{
+            uploadArea.classList.remove('dragover');
+        }});
+
+        uploadArea.addEventListener('drop', (e) => {{
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        }});
+
+        fileInput.addEventListener('change', (e) => {{
+            handleFiles(e.target.files);
+        }});
+
+        const allowUpload = {4};
+        const allowDelete = {5};
+
+        async function handleFiles(files) {{
+            if (files.length === 0) return;
+
+            if (!allowUpload) {{
+                showToast('此服务器当前为只读模式，暂不支持上传文件', 'error');
+                return;
+            }}
+
+            uploadProgress.classList.add('active');
+            let successCount = 0;
+            
+            for (let i = 0; i < files.length; i++) {{
+                const file = files[i];
+                uploadStatus.textContent = `上传中: ${{file.name}} (${{i + 1}}/${{files.length}})`;
+                
+                try {{
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    
+                    const uploadPath = currentPath.endsWith('/') ? currentPath : currentPath + '/';
+                    const response = await fetch(uploadPath, {{
+                        method: 'POST',
+                        body: formData
+                    }});
+                    
+                    const result = await response.json();
+                    if (!result.success) {{
+                        showToast(`上传失败: ${{file.name}} - ${{result.message}}`, 'error');
+                    }} else {{
+                        successCount++;
+                    }}
+                    
+                    progressFill.style.width = ((i + 1) / files.length * 100) + '%';
+                }} catch (err) {{
+                    showToast(`上传失败: ${{file.name}}`, 'error');
+                }}
+            }}
+            
+            uploadProgress.classList.remove('active');
+            progressFill.style.width = '0%';
+            
+            if (successCount > 0) {{
+                showToast(`成功上传 ${{successCount}} 个文件`, 'success');
+                setTimeout(() => location.reload(), 1500);
+            }}
+        }}
+
+        // 更新上传区域样式
+        if (!allowUpload) {{
+            uploadArea.style.opacity = '0.5';
+            uploadArea.style.cursor = 'not-allowed';
+            uploadArea.querySelector('.upload-text').innerHTML = '上传已禁用 (启动时添加 --allow-upload 参数)';
+        }}
+    </script>
+</body>
+</html>"#, html_escape(base_url), folder_count, file_count, format_file_size(total_size), allow_upload, allow_delete));
 
     Ok(html)
 }
@@ -463,21 +992,20 @@ mod tests {
     fn test_build_directory_listing_structure() {
         // Happy Path: 目录列表 HTML 结构
         let temp_dir = std::env::temp_dir();
-        let html = build_directory_listing(&temp_dir, "/test/").unwrap();
+        let html = build_directory_listing(&temp_dir, "/test/", false, false).unwrap();
 
         assert!(html.contains("<!DOCTYPE html>"));
-        assert!(html.contains("<html>"));
+        assert!(html.contains("<html"));
         assert!(html.contains("</html>"));
-        assert!(html.contains("<ul>"));
-        assert!(html.contains("</ul>"));
-        assert!(html.contains("Index of /test/"));
+        assert!(html.contains("file-list"));
+        assert!(html.contains("/test/"));
     }
 
     #[test]
     fn test_build_directory_listing_parent_link() {
         // Happy Path: 非根目录有父目录链接
         let temp_dir = std::env::temp_dir();
-        let html = build_directory_listing(&temp_dir, "/sub/dir/").unwrap();
+        let html = build_directory_listing(&temp_dir, "/sub/dir/", false, false).unwrap();
         assert!(html.contains("../"));
     }
 
@@ -485,7 +1013,23 @@ mod tests {
     fn test_directory_listing_no_parent_at_root() {
         // Edge Case: 根目录没有父目录链接
         let temp_dir = std::env::temp_dir();
-        let html = build_directory_listing(&temp_dir, "/").unwrap();
-        assert!(!html.contains("../"));
+        let html = build_directory_listing(&temp_dir, "/", false, false).unwrap();
+        assert!(!html.contains("返回上级目录"));
+    }
+
+    #[test]
+    fn test_directory_listing_upload_enabled() {
+        // 测试上传启用时的提示
+        let temp_dir = std::env::temp_dir();
+        let html = build_directory_listing(&temp_dir, "/", true, false).unwrap();
+        assert!(html.contains("allowUpload = true"));
+    }
+
+    #[test]
+    fn test_directory_listing_upload_disabled() {
+        // 测试上传禁用时的提示
+        let temp_dir = std::env::temp_dir();
+        let html = build_directory_listing(&temp_dir, "/", false, false).unwrap();
+        assert!(html.contains("allowUpload = false"));
     }
 }

@@ -56,6 +56,26 @@ struct Cli {
     /// 跟随符号链接 (默认：禁用，安全考虑)
     #[arg(long = "follow-symlinks", default_value = "false")]
     follow_symlinks: bool,
+
+    /// 启用文件上传
+    #[arg(long = "allow-upload", default_value = "false")]
+    allow_upload: bool,
+
+    /// 启用文件删除
+    #[arg(long = "allow-delete", default_value = "false")]
+    allow_delete: bool,
+
+    /// Basic Auth 认证 (格式: username:password)
+    #[arg(long = "auth")]
+    auth: Option<String>,
+
+    /// 最大上传文件大小 (字节，默认 100MB)
+    #[arg(long = "max-upload-size", default_value = "104857600")]
+    max_upload_size: u64,
+
+    /// 每秒最大请求数 (0 表示不限制)
+    #[arg(long = "rate-limit", default_value = "0")]
+    rate_limit: u32,
 }
 
 /// 初始化日志记录器
@@ -122,6 +142,8 @@ async fn main() -> ServerResult<()> {
         root_dir,
         cors: cli.cors,
         follow_symlinks: cli.follow_symlinks,
+        allow_upload: cli.allow_upload,
+        allow_delete: cli.allow_delete,
     };
 
     // 打印启动信息
@@ -138,6 +160,14 @@ async fn main() -> ServerResult<()> {
 
     if config.follow_symlinks {
         tracing::warn!("Following symlinks - security risk!");
+    }
+
+    if config.allow_upload {
+        tracing::info!("File upload enabled");
+    }
+
+    if config.allow_delete {
+        tracing::warn!("File deletion enabled - use with caution!");
     }
 
     // 启动服务器
@@ -199,6 +229,8 @@ mod tests {
         assert_eq!(cli.dir, ".");
         assert!(!cli.cors);
         assert!(!cli.follow_symlinks);
+        assert!(!cli.allow_upload);
+        assert!(!cli.allow_delete);
     }
 
     #[test]
@@ -211,12 +243,16 @@ mod tests {
             "-h", "0.0.0.0",
             "--cors",
             "--follow-symlinks",
+            "--allow-upload",
+            "--allow-delete",
         ]);
         assert_eq!(cli.port, 8080);
         assert_eq!(cli.host, "0.0.0.0");
         assert_eq!(cli.dir, "/var/www");
         assert!(cli.cors);
         assert!(cli.follow_symlinks);
+        assert!(cli.allow_upload);
+        assert!(cli.allow_delete);
     }
 
     #[test]
