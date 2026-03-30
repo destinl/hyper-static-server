@@ -167,6 +167,12 @@ OPTIONS:
     --follow-symlinks
         Follow symbolic links (default: disabled for security)
 
+    --allow-upload
+        Enable file upload via web interface (default: disabled)
+
+    --allow-delete
+        Enable file deletion via web interface (default: disabled)
+
     --help
         Print help message
 ```
@@ -185,6 +191,9 @@ hyper-static-server --cors
 
 # Enable symlinks (with security warning)
 hyper-static-server --follow-symlinks
+
+# Enable file upload and delete (interactive mode)
+hyper-static-server --allow-upload --allow-delete
 ```
 
 ---
@@ -360,7 +369,9 @@ curl http://localhost:3000/subfolder/document.pdf
 
 ### File Permissions
 
-- Read-only access (no write/delete operations)
+- Default: Read-only access (no write/delete operations)
+- With `--allow-upload`: Allows file uploads via web interface
+- With `--allow-delete`: Allows file/directory deletion via web interface
 - Respects OS file permissions (403 if no read access)
 - Error messages don't leak file paths
 
