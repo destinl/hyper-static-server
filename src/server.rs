@@ -8,7 +8,7 @@
 /// - 静态文件：使用状态层处理
 
 use axum::{
-    routing::{get, post, delete, Router},
+    routing::{get, Router},  // 移除 post 和 delete，除非你确实需要它们
     extract::{Path, State, Request, Multipart},
     response::{Response, IntoResponse, Json},
     http::{Method, StatusCode, header},
@@ -33,21 +33,18 @@ impl IntoResponse for ServerError {
     fn into_response(self) -> Response {
         let (status, message) = match &self {
             ServerError::NotFound => (StatusCode::NOT_FOUND, "Not Found"),
-            ServerError::BadRequest => (StatusCode::BAD_REQUEST, "Bad Request"),
-            ServerError::InternalServerError => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
-            ServerError::DatabaseError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Database Error"),
-            ServerError::FileError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "File Error"),
+            ServerError::PermissionDenied => (StatusCode::FORBIDDEN, "Permission Denied"),
+            ServerError::PathTraversal => (StatusCode::BAD_REQUEST, "Path Traversal Detected"),
+            ServerError::InvalidRange => (StatusCode::BAD_REQUEST, "Invalid Range Request"),
+            ServerError::SymlinkEscape => (StatusCode::BAD_REQUEST, "Symlink Escape Not Allowed"),
             ServerError::IoError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
+            ServerError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.as_str()),
             ServerError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
             ServerError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Too Many Requests"),
             ServerError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large"),
-            // 使用通配符处理其他未列出的变体
-            _ => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
         };
 
-        let body = format!("{} {}\n", status.as_u16(), message);
-
-        (status, body).into_response()
+        (status, Json(serde_json::json!({ "error": message }))).into_response()
     }
 }
 
