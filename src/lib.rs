@@ -31,6 +31,7 @@
 pub mod error;
 pub mod mime;
 pub mod response;
+pub mod json_formatter;
 pub mod server;
 
 // 重新导出常用类型
@@ -38,3 +39,4 @@ pub use error::{ServerError, ServerResult};
 pub use server::{ServerConfig, start_server};
 pub use mime::detect_mime_type;
 pub use response::FileMetadata;
+pub use json_formatter::{format_json, JsonFormattingResult};

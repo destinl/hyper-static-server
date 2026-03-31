@@ -1,20 +1,263 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-    <title>hyper-static-server</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hyper-static-server - 高性能静态文件服务器</title>
     <style>
-        body { font-family: Arial; text-align: center; padding: 50px; }
-        h1 { color: #4CAF50; }
-        .info { background: #f0f0f0; padding: 20px; border-radius: 8px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 15px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideIn 0.6s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .tagline {
+            text-align: center;
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 40px;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .feature-card {
+            background: #f8f9ff;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .feature-card p {
+            color: #555;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        .divider {
+            height: 1px;
+            background: #eee;
+            margin: 30px 0;
+        }
+
+        .tools-section h2 {
+            color: #333;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .tools-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .tool-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+            border: none;
+            font-size: 1em;
+            display: block;
+            text-align: center;
+        }
+
+        .tool-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .tool-icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .tool-title {
+            font-weight: bold;
+            font-size: 1.2em;
+            margin-bottom: 5px;
+        }
+
+        .tool-desc {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .info-item {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .info-label {
+            color: #999;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            color: #667eea;
+            font-weight: bold;
+            font-size: 1.3em;
+        }
+
+        .footer {
+            text-align: center;
+            color: #999;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 30px 20px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>🚀 hyper-static-server is running!</h1>
-    <div class="info">
-        <p><strong>Server:</strong> Rust + axum + tokio</p>
-        <p><strong>Performance:</strong> 100k+ req/s</p>
-        <p><strong>Memory:</strong> ~15-30 MB</p>
-        <p><strong>Docker:</strong> Multi-stage build</p>
+    <div class="container">
+        <h1>🚀 hyper-static-server</h1>
+        <p class="tagline">高性能 Rust 静态文件服务器</p>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h3>⚡ 高性能</h3>
+                <p>使用 Rust + axum 框架，吞吐量超过 100k req/s，远超 Node.js 和 Python</p>
+            </div>
+            <div class="feature-card">
+                <h3>💾 低内存</h3>
+                <p>内存占用仅 15-30 MB，是 Node.js 的 1/6，完整异步处理</p>
+            </div>
+            <div class="feature-card">
+                <h3>🔒 安全</h3>
+                <p>内置目录遍历防护、符号链接检查、强制类型安全</p>
+            </div>
+            <div class="feature-card">
+                <h3>📦 Docker</h3>
+                <p>支持多阶段构建，优化的生产镜像，开箱即用部署</p>
+            </div>
+            <div class="feature-card">
+                <h3>🚀 零配置</h3>
+                <p>开箱即用，支持自定义端口、目录、CORS 等选项</p>
+            </div>
+            <div class="feature-card">
+                <h3>📊 完整功能</h3>
+                <p>支持缓存验证、Range 请求、目录列表、文件服务</p>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="tools-section">
+            <h2>🛠️ 可用工具</h2>
+            <div class="tools-grid">
+                <a href="json-formatter.html" class="tool-card">
+                    <div class="tool-icon">📝</div>
+                    <div class="tool-title">JSON 格式化工具</div>
+                    <div class="tool-desc">格式化、排序、统计 JSON 文件，支持转义符处理</div>
+                </a>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">吞吐量</div>
+                <div class="info-value">100k+ req/s</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">内存</div>
+                <div class="info-value">~30 MB</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">版本</div>
+                <div class="info-value">0.1.0</div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>使用 Rust + Tokio + Axum 构建 | <a href="#" style="color: #667eea; text-decoration: none;">GitHub</a></p>
+        </div>
     </div>
 </body>
 </html>

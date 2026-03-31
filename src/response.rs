@@ -15,7 +15,7 @@ use axum::{
 use std::path::Path;
 use std::time::SystemTime;
 use tokio::fs::File;
-use tokio::io::{AsyncSeekExt, SeekFrom};
+use tokio::io::{AsyncSeekExt, AsyncReadExt, SeekFrom};
 use tokio_util::io::ReaderStream;
 use urlencoding::encode;
 
@@ -48,6 +48,8 @@ impl FileMetadata {
     ///
     /// # Examples
     /// ```
+    /// use std::time::SystemTime;
+    /// use hyper_static_server::response::FileMetadata;
     /// let meta = FileMetadata { size: 4096, modified: SystemTime::UNIX_EPOCH };
     /// let etag = meta.generate_etag();
     /// assert_eq!(etag, "0-1000");

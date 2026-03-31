@@ -12,7 +12,7 @@
 /// hyper-static-server -p 8080 -d /var/www
 ///
 /// # 绑定到所有接口
-/// hyper-static-server -h 0.0.0.0 -p 3000
+/// hyper-static-server -H 0.0.0.0 -p 3000
 ///
 /// # 启用 CORS
 /// hyper-static-server --cors
@@ -25,6 +25,7 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber};
 mod error;
 mod mime;
 mod response;
+mod json_formatter;
 mod server;
 
 use error::ServerResult;
@@ -46,7 +47,7 @@ struct Cli {
     dir: String,
 
     /// 绑定地址
-    #[arg(short = 'h', long = "host", default_value = "127.0.0.1")]
+    #[arg(short = 'H', long = "host", default_value = "127.0.0.1")]
     host: String,
 
     /// 启用 CORS 头
@@ -208,7 +209,7 @@ mod tests {
             "hyper-static-server",
             "-p", "8080",
             "-d", "/var/www",
-            "-h", "0.0.0.0",
+            "-H", "0.0.0.0",
             "--cors",
             "--follow-symlinks",
         ]);

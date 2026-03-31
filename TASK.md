@@ -69,7 +69,7 @@
 ---
 
 - [x] **实现 CLI 参数解析 (clap derive)** (完成)
-  - [x] 定义参数: `-p/--port`, `-d/--dir`, `-h/--host`, `--cors`, `--follow-symlinks`
+  - [x] 定义参数: `-p/--port`, `-d/--dir`, `-H/--host`, `--cors`, `--follow-symlinks`
   - [x] 默认值: port=3000, dir=".", host="127.0.0.1", cors=false
   - [x] 帮助文本和示例
   - [x] 单元测试: 参数验证 (正常/无效/边界)

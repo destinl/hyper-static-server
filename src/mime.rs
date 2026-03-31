@@ -16,6 +16,7 @@ use mime_guess::MimeGuess;
 /// # Examples
 /// ```
 /// use std::path::Path;
+/// use hyper_static_server::detect_mime_type;
 /// let mime = detect_mime_type(Path::new("test.html"));
 /// assert_eq!(mime, "text/html");
 /// ```
@@ -23,9 +24,33 @@ pub fn detect_mime_type(path: &std::path::Path) -> String {
     // PERF: 使用 mime_guess 的 first_or_octet_stream 方法
     // 理由: 未知类型时返回 application/octet-stream 而非失败
     // 基准: 比手动映射快 2x (内部使用哈希表缓存)
-    MimeGuess::from_path(path)
+    
+    // 先检查文件扩展名进行特殊处理
+    if let Some(ext) = path.extension() {
+        if let Some(ext_str) = ext.to_str() {
+            let ext_lower = ext_str.to_lowercase();
+            match ext_lower.as_str() {
+                // JavaScript 文件: 使用标准 application/javascript (RFC 9239)
+                "js" => return "application/javascript".to_string(),
+                // XML 文件: 使用标准 application/xml 而非 text/xml
+                "xml" => return "application/xml".to_string(),
+                // 其他已知常见类型通过 mime_guess 处理
+                _ => {}
+            }
+        }
+    }
+    
+    let mime = MimeGuess::from_path(path)
         .first_or_octet_stream()
-        .to_string()
+        .to_string();
+    
+    // 对于化学相关或其他 mime_guess 库判定的特殊类型，
+    // 如果看起来不像标准 MIME 类型或是生僻扩展，转换为 octet-stream
+    if mime.starts_with("chemical/") || mime.starts_with("x-") {
+        return "application/octet-stream".to_string();
+    }
+    
+    mime
 }
 
 /// 获取常见扩展名的 MIME 类型 (用于测试)

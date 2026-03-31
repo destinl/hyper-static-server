@@ -8,14 +8,16 @@
 /// - 静态文件：使用状态层处理
 
 use axum::{
-    routing::{get, Router},
+    routing::{get, post, Router},
     extract::{Path, State, Request},
     response::{Response, IntoResponse},
     http::{Method, StatusCode, header},
+    Json,
 };
 use std::{path::{Component, PathBuf}, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
+use serde::{Deserialize, Serialize};
 
 use crate::error::{ServerError, ServerResult};
 use crate::response::{
@@ -25,6 +27,7 @@ use crate::response::{
     build_partial_response,
     build_directory_listing,
 };
+use crate::json_formatter::format_json;
 use tower_http::trace::TraceLayer;
 
 /// 为 ServerError 实现 IntoResponse，允许直接从 handler 返回错误
@@ -118,7 +121,35 @@ fn validate_path_within_root(
 }
 
 /// URL 解码辅助函数
+/// 
+/// 解码 URL 编码的字符串，并验证百分号编码的有效性。
+/// 对于无效的百分号编码（如 "%"、"%2"、"%XX" 等）返回错误。
 fn decode_url(s: &str) -> Result<String, ServerError> {
+    // 检查是否有无效的百分号编码
+    // 有效的百分号编码格式: % 后跟两个十六进制数字
+    let mut chars = s.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '%' {
+            // 检查是否有后续两个字符
+            let next1 = chars.next();
+            let next2 = chars.next();
+            
+            match (next1, next2) {
+                (Some(c1), Some(c2)) => {
+                    // 验证两个字符都是有效的十六进制
+                    if !c1.is_ascii_hexdigit() || !c2.is_ascii_hexdigit() {
+                        return Err(ServerError::BadRequest("Invalid URL encoding".into()));
+                    }
+                }
+                (Some(_), None) | (None, _) => {
+                    // 百分号后没有两个字符
+                    return Err(ServerError::BadRequest("Invalid URL encoding".into()));
+                }
+            }
+        }
+    }
+    
+    // 使用 urlencoding 库进行实际解码
     urlencoding::decode(s)
         .map(|cow| cow.into_owned())
         .map_err(|_| ServerError::BadRequest("Invalid URL encoding".into()))
@@ -301,6 +332,53 @@ async fn handle_wildcard(
     handle_static_file(Path(requested_path), State(state), request).await
 }
 
+/// JSON 格式化请求体
+#[derive(Debug, Deserialize)]
+pub struct JsonFormatRequest {
+    /// 要格式化的 JSON 字符串
+    pub json: String,
+}
+
+/// JSON 格式化响应
+#[derive(Debug, Serialize)]
+pub struct JsonFormatResponse {
+    /// 是否成功
+    pub success: bool,
+    /// 格式化后的 JSON
+    pub formatted: String,
+    /// 是否为有效 JSON
+    pub is_valid: bool,
+    /// 错误信息（如果有）
+    pub error: Option<String>,
+    /// 数组统计
+    pub array_stats: serde_json::Value,
+}
+
+/// 处理 JSON 格式化请求
+///
+/// POST /api/format-json
+/// Body: {"json": "..."}
+async fn handle_format_json(
+    State(_state): State<Arc<AppState>>,
+    Json(payload): Json<JsonFormatRequest>,
+) -> impl IntoResponse {
+    let result = format_json(&payload.json);
+
+    // 将 array_stats 转换为 JSON Value 以便序列化
+    let array_stats_json: serde_json::Value = serde_json::to_value(&result.array_stats)
+        .unwrap_or(serde_json::json!({}));
+
+    let response = JsonFormatResponse {
+        success: result.is_valid,
+        formatted: result.formatted,
+        is_valid: result.is_valid,
+        error: result.error,
+        array_stats: array_stats_json,
+    };
+
+    (StatusCode::OK, Json(response))
+}
+
 /// 启动 HTTP 服务器
 ///
 /// # Arguments
@@ -322,6 +400,11 @@ pub async fn start_server(config: ServerConfig) -> ServerResult<()> {
             "/",
             get(handle_root)
                 .head(handle_root)
+                .options(handle_options),
+        )
+        .route(
+            "/api/format-json",
+            post(handle_format_json)
                 .options(handle_options),
         )
         .route(

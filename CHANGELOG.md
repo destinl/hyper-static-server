@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ✨ Command-line interface with full parameter support:
   - `-p/--port`: Custom listen port
   - `-d/--dir`: Serve directory
-  - `-h/--host`: Bind address
+  - `-H/--host`: Bind address
   - `--cors`: Enable CORS
   - `--follow-symlinks`: Symlink handling
 - ✨ Comprehensive test coverage:

@@ -158,7 +158,7 @@ OPTIONS:
     -d, --dir <DIR>
         Serve directory (default: current directory)
 
-    -h, --host <HOST>
+    -H, --host <HOST>
         Bind address (default: 127.0.0.1)
 
     --cors
