@@ -143,8 +143,8 @@ async fn main() -> ServerResult<()> {
         root_dir,
         cors: cli.cors,
         follow_symlinks: cli.follow_symlinks,
-        allow_upload: cli.allow_upload,
-        allow_delete: cli.allow_delete,
+        // 注意: allow_upload 和 allow_delete 暂时不在 ServerConfig 中，
+        // 功能正在开发中（第 2 阶段）
     };
 
     // 打印启动信息
@@ -163,13 +163,14 @@ async fn main() -> ServerResult<()> {
         tracing::warn!("Following symlinks - security risk!");
     }
 
-    if config.allow_upload {
-        tracing::info!("File upload enabled");
-    }
+    // 注意: 文件上传/删除功能正在开发中，暂时禁用
+    // if config.allow_upload {
+    //     tracing::info!("File upload enabled");
+    // }
 
-    if config.allow_delete {
-        tracing::warn!("File deletion enabled - use with caution!");
-    }
+    // if config.allow_delete {
+    //     tracing::warn!("File deletion enabled - use with caution!");
+    // }
 
     // 启动服务器
     server::start_server(config).await?;

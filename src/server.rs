@@ -41,6 +41,9 @@ impl IntoResponse for ServerError {
             ServerError::InvalidRange => (StatusCode::BAD_REQUEST, "Invalid Range Request"),
             ServerError::BadRequest(_) => (StatusCode::BAD_REQUEST, "Bad Request"),
             ServerError::IoError(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error"),
+            ServerError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized"),
+            ServerError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "Too Many Requests"),
+            ServerError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "Payload Too Large"),
         };
 
         let body = format!("{} {}\n", status.as_u16(), message);
@@ -225,7 +228,8 @@ fn handle_directory_request(
     cors: bool,
 ) -> Result<Response, ServerError> {
     // 生成目录列表 HTML
-    let html = build_directory_listing(dir_path, request_path)?;
+    // 注意: allow_upload 和 allow_delete 暂时禁用（设为 false），可在后续更新中启用
+    let html = build_directory_listing(dir_path, request_path, false, false)?;
 
     let mut response = Response::builder()
         .status(StatusCode::OK)
