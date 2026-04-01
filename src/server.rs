@@ -555,7 +555,7 @@ mod tests {
     fn test_directory_listing_generation() {
         // Happy Path: 目录列表生成
         let temp_dir = std::env::temp_dir();
-        let result = build_directory_listing(&temp_dir, "/test/");
+        let result = build_directory_listing(&temp_dir, "/test/", false, false);
         assert!(result.is_ok());
         let html = result.unwrap();
         assert!(html.contains("<!DOCTYPE html>"));

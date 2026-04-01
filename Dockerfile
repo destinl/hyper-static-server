@@ -15,6 +15,7 @@ RUN echo '[source.crates-io]' > $CARGO_HOME/config.toml && \
 COPY Cargo.toml .
 COPY src ./src
 COPY benches ./benches
+COPY public ./public
 
 # Build the application
 RUN cargo build --release
@@ -29,7 +30,7 @@ RUN useradd -r -s /bin/false hyperuser
 WORKDIR /app
 
 COPY --from=builder /app/target/release/hyper-static-server /app/hyper-static-server
-COPY public ./public
+COPY --from=builder /app/public ./public
 
 RUN chown -R hyperuser:hyperuser /app
 
